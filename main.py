@@ -4,20 +4,20 @@ import logging
 import flask
 from flask import request
 from google.cloud import bigquery
-import function.natureCentroidCitation as natureCentroidCitation #the subfolder structure for calling the script
-import function.natureCentroidCitationSF as natureCentroidCitationSF 
-import function.natureCentroidEO as natureCentroidEO 
-import function.natureCentroidEOcross as natureCentroidEOcross 
-import function.natureCentroid as natureCentroid
-import function.naturePoint as naturePoint
-import function.naturePoly as naturePoly
-import function.natureLine as natureLine
+import functions.natureCentroidCitation as natureCentroidCitation #the subfolder structure for calling the script
+import functions.natureCentroidCitationSF as natureCentroidCitationSF 
+import functions.natureCentroidEO as natureCentroidEO 
+import functions.natureCentroidEOcross as natureCentroidEOcross 
+import functions.natureCentroid as natureCentroid
+import functions.naturePoint as naturePoint
+import functions.naturePoly as naturePoly
+import functions.natureLine as natureLine
 import os
 
 app = flask.Flask(__name__)
 @app.route('/')
 def nature():
-    return "Version 1 written by william wiskes 9/29/22 published under MIT"
+    return "Version 2 written by william wiskes 9/29/22 published under MIT, modified by Tyler Stratman 10/2/24"
 
 
 @app.route('/natureCentroidCitation') 
