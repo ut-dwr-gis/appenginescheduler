@@ -17,7 +17,7 @@ import os
 app = flask.Flask(__name__)
 @app.route('/')
 def nature():
-    return "Version 2 written by william wiskes 9/29/22 published under MIT, modified by Tyler Stratman 10/2/24"
+    return "Version 2 modified by Tyler Stratman 10/2/2024, written by william wiskes 9/29/22 published under MIT"
 
 
 @app.route('/natureCentroidCitation') 
@@ -26,7 +26,6 @@ def start_natureCentroidCitation():
     # is_cron = request.headers.get('X-Appengine-Cron', False)
     # if not is_cron:
     #     return 'Bad Request', 400
-
     try:
         ncc = natureCentroidCitation.run() 
         return ncc, 200
