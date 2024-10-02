@@ -36,7 +36,9 @@ CENTROID_VW_EGT.S_RANK,
 CENTROID_VW_EGT.G_RANK,
 CENTROID_VW_EGT.SPROT,
 
-CENTROID_VW_USESA.USESA_STAT, CENTROID_VW_USESA.USESA_COM,
+CENTROID_VW_USESA.USESA_STAT,
+CENTROID_VW_USESA.USESA_COM,
+
 CENTROID_VW_WAP.WAP_STAT,
 
 CENTROID_VW_SF.SFDESC,
@@ -76,10 +78,8 @@ AND CENTROID_VW_SF.SF_ID=CENTROID_VW_OBSERVATION.SF_ID(+)
 
     PROJECT_ID = 'ut-dnr-biobase-dev'
     client = bigquery.Client(project=PROJECT_ID, location="US")
-    # set location 
     dataset_id = 'biobase'
     table_id = 'natureCentroid'
-    # set config
     dataset_ref = client.dataset(dataset_id)
     table_ref = dataset_ref.table(table_id)
     job_config = bigquery.LoadJobConfig()
