@@ -32,7 +32,7 @@ FROM SOURCE_FEATURE_PRE_Line
     PROJECT_ID = 'ut-dnr-biobase-dev'
     client = bigquery.Client(project=PROJECT_ID, location="US")
     # set location 
-    dataset_id = 'biobase'
+    dataset_id = 'biotics'
     table_id = 'natureLine'
     # set config
     dataset_ref = client.dataset(dataset_id)
