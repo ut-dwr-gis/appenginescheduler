@@ -67,7 +67,7 @@ EO_ID from CENTROID_VW_EO_2016
     PROJECT_ID = 'ut-dnr-biobase-dev'
     client = bigquery.Client(project=PROJECT_ID, location="US")
     # set location 
-    dataset_id = 'biobase'
+    dataset_id = 'biotics'
     table_id = 'natureCentroidEO'
     # set config
     dataset_ref = client.dataset(dataset_id)
