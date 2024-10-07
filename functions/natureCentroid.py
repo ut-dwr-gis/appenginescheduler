@@ -78,7 +78,7 @@ AND CENTROID_VW_SF.SF_ID=CENTROID_VW_OBSERVATION.SF_ID(+)
 
     PROJECT_ID = 'ut-dnr-biobase-dev'
     client = bigquery.Client(project=PROJECT_ID, location="US")
-    dataset_id = 'biobase'
+    dataset_id = 'biotics'
     table_id = 'natureCentroid'
     dataset_ref = client.dataset(dataset_id)
     table_ref = dataset_ref.table(table_id)
