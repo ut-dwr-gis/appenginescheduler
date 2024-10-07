@@ -45,6 +45,7 @@ cd C:\Users\exampleName\Documents\bioticsscheduler
 git clone https://github.com/ut-dwr-gis/appenginescheduler.git
 cd .\appenginescheduler\ #Confirm correct files are listed
 git pull
-gcloud app deploy ./app.yaml
+gcloud app deploy ./app.yaml #Configure app and deployment
+gcloud app deploy ./cron.yaml #Need this after app.yaml deployment to update cron jobs
 ```
 
