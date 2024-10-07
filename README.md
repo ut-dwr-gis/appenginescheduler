@@ -20,10 +20,10 @@ To redeploy in the biobase-dev GCP project:
 Open computer terminal/PowerShell.  
 
 ```
-#Make sure gcloud CLI is installed on your system.
+# Make sure gcloud CLI is installed on your system.
 gcloud version
 
-If CLI is not installed run:
+# If CLI is not installed run:
 (New-Object Net.WebClient).DownloadFile("https://dl.google.com/dl/cloudsdk/channels/rapid/", "$env:Temp\GoogleCloudSDKInstaller.exe")
 & $env:Temp\GoogleCloudSDKInstaller.exe
 ```
