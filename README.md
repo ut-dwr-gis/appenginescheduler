@@ -19,28 +19,28 @@ conn = oracledb.connect(
 To redeploy in the biobase-dev GCP project:
 Open computer terminal/PowerShell.  
 
-'''
+```
 #Make sure gcloud CLI is installed on your system.
 gcloud version
 
 If CLI is not installed run:
 (New-Object Net.WebClient).DownloadFile("https://dl.google.com/dl/cloudsdk/channels/rapid/", "$env:Temp\GoogleCloudSDKInstaller.exe")
 & $env:Temp\GoogleCloudSDKInstaller.exe
-'''
+```
 For first-time setup you may need to navigate to the Registry Editor on your machine and navigate to HKEY_LOCAL_MACHINE->SOFTWARE->Microsoft->PowerShell->1->ShellIds->Microsoft_PowerShell and add an item by right clicking and selecting New->String Value named "ExecutionPolicy". Double click the new item and add value "RemoteSigned".
 
 Additional setup steps:
-'''
+```
 gcloud init #sign in, set project, set region
 gcloud auth application-default login
-'''
+```
 
 Finally, clone this repo in a local directory with the custom modified env.py file, then deploy in PowerShell. 
-'''
+```
 cd C:\Users\exampleName\Documents\bioticsscheduler
 git clone https://github.com/ut-dwr-gis/appenginescheduler.git
 cd .\appenginescheduler\ #Confirm correct files are listed
 git pull
 gcloud app deploy ./app.yaml
-'''
+```
 
