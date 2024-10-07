@@ -27,7 +27,11 @@ If CLI is not installed run:
 (New-Object Net.WebClient).DownloadFile("https://dl.google.com/dl/cloudsdk/channels/rapid/", "$env:Temp\GoogleCloudSDKInstaller.exe")
 & $env:Temp\GoogleCloudSDKInstaller.exe
 ```
-For first-time setup you may need to navigate to the Registry Editor on your machine and navigate to HKEY_LOCAL_MACHINE->SOFTWARE->Microsoft->PowerShell->1->ShellIds->Microsoft_PowerShell and add an item by right clicking and selecting New->String Value named "ExecutionPolicy". Double click the new item and add value "RemoteSigned".
+For first-time setup you may need to navigate to the Registry Editor on your machine and find:
+HKEY_LOCAL_MACHINE->SOFTWARE->Microsoft->PowerShell->1->ShellIds->Microsoft_PowerShell
+Add an item by right clicking and selecting 
+New->String Value 
+Name it "ExecutionPolicy" then Double click the new item and add value = "RemoteSigned".
 
 Additional setup steps:
 ```
