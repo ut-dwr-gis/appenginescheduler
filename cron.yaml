@@ -21,7 +21,7 @@ cron:
   target: default
 - description: natureCentroid
   url: /natureCentroid
-  schedule: every monday 03:00 #short query, ok to run sequentially. 30 min run time.
+  schedule: every hour #short query, ok to run sequentially. 30 min run time.
   timezone: America/Boise
   target: default
 - description: naturePoint
