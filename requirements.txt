@@ -2,7 +2,7 @@ google-api-python-client
 Flask
 oracledb
 google-cloud-bigquery
-pandas
+pandas==2.1.4
 fiona
 pygeos
 db-dtypes
