@@ -8,7 +8,9 @@ import functions.natureCentroidCitation as natureCentroidCitation #the subfolder
 import functions.natureCentroidCitationSF as natureCentroidCitationSF 
 import functions.natureCentroidEO as natureCentroidEO 
 import functions.natureCentroidEOcross as natureCentroidEOcross 
-import functions.natureCentroid as natureCentroid
+import functions.natureCentroid as natureCentroid60k
+import functions.natureCentroid as natureCentroid60k_140k
+import functions.natureCentroid as natureCentroid140k
 import functions.naturePoint as naturePoint
 import functions.naturePoly as naturePoly
 import functions.natureLine as natureLine
@@ -60,10 +62,28 @@ def start_natureCentroidEOcross():
         logging.exception(e)
         return "Error: <pre>{}</pre>".format(e), 500
 
-@app.route('/natureCentroid')
-def start_natureCentroid(): 
+@app.route('/natureCentroid60k')
+def start_natureCentroid60k(): 
     try:
-        nc = natureCentroid.run() 
+        nc = natureCentroid60k.run() 
+        return nc, 200
+    except Exception as e:
+        logging.exception(e)
+        return "Error: <pre>{}</pre>".format(e), 500
+
+@app.route('/natureCentroid60k_140k')
+def start_natureCentroid60k_140k(): 
+    try:
+        nc = natureCentroid60k_140k.run() 
+        return nc, 200
+    except Exception as e:
+        logging.exception(e)
+        return "Error: <pre>{}</pre>".format(e), 500
+
+@app.route('/natureCentroid140k')
+def start_natureCentroid140k(): 
+    try:
+        nc = natureCentroid140k.run() 
         return nc, 200
     except Exception as e:
         logging.exception(e)
