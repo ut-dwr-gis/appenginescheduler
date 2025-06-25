@@ -19,23 +19,33 @@ cron:
   schedule: every sunday 18:45 #short query, ok to run sequentially. 16 min run time.
   timezone: America/Boise
   target: default
-- description: natureCentroid
-  url: /natureCentroid
-  schedule: every sunday 19:30 #short query, ok to run sequentially. 30 min run time.
-  timezone: America/Boise
-  target: default
 - description: naturePoint
   url: /naturePoint
-  schedule: every sunday 21:00 #short query, ok to run sequentially. 16 min run time.
+  schedule: every sunday 19:30 #short query, ok to run sequentially. 16 min run time.
   timezone: America/Boise
   target: default
 - description: natureLine
   url: /natureLine
-  schedule: every sunday 21:45 #short query, ok to run sequentially. 16 min run time.
+  schedule: every sunday 20:15 #short query, ok to run sequentially. 16 min run time.
   timezone: America/Boise
   target: default
 - description: naturePoly
   url: /naturePoly
-  schedule: every sunday 22:30 #short query, ok to run sequentially. 15 min run time.
+  schedule: every sunday 22:00 #short query, ok to run sequentially. 15 min run time.
+  timezone: America/Boise
+  target: default
+- description: natureCentroid60k
+  url: /natureCentroid
+  schedule: every sunday 22:45 #short query, ok to run sequentially. 25 min run time.
+  timezone: America/Boise
+  target: default
+- description: natureCentroid60k_140k
+  url: /natureCentroid
+  schedule: every monday 00:30 #short query, ok to run sequentially. 30 min run time.
+  timezone: America/Boise
+  target: default
+- description: natureCentroid140k
+  url: /natureCentroid
+  schedule: every monday 02:00 #short query, ok to run sequentially. 30 min run time.
   timezone: America/Boise
   target: default
