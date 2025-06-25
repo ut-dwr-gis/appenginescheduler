@@ -17,7 +17,7 @@ import os
 app = flask.Flask(__name__)
 @app.route('/')
 def nature():
-    return "Version 2 modified by Tyler Stratman 10/2/2024, written by william wiskes 9/29/22 published under MIT"
+    return "Flask App (Pipeline) modified by Tyler Stratman 06/25/2025, originally written by william wiskes 9/29/22 published under MIT"
 
 
 @app.route('/natureCentroidCitation') 
