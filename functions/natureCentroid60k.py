@@ -80,7 +80,7 @@ AND CENTROID_VW_SF.SF_ID < 60000
     PROJECT_ID = 'ut-dnr-biobase-dev'
     client = bigquery.Client(project=PROJECT_ID, location="US")
     dataset_id = 'biotics'
-    table_id = 'natureCentroid_under60000'
+    table_id = 'natureCentroid_under60k'
     dataset_ref = client.dataset(dataset_id)
     table_ref = dataset_ref.table(table_id)
     job_config = bigquery.LoadJobConfig()
