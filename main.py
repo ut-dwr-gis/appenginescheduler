@@ -8,9 +8,9 @@ import functions.natureCentroidCitation as natureCentroidCitation #the subfolder
 import functions.natureCentroidCitationSF as natureCentroidCitationSF 
 import functions.natureCentroidEO as natureCentroidEO 
 import functions.natureCentroidEOcross as natureCentroidEOcross 
-import functions.natureCentroid as natureCentroid60k
-import functions.natureCentroid as natureCentroid60k_140k
-import functions.natureCentroid as natureCentroid140k
+import functions.natureCentroid60k as natureCentroid60k
+import functions.natureCentroid60k_140k as natureCentroid60k_140k
+import functions.natureCentroid140k as natureCentroid140k
 import functions.naturePoint as naturePoint
 import functions.naturePoly as naturePoly
 import functions.natureLine as natureLine
