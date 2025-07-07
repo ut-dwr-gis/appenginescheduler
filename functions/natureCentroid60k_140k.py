@@ -85,7 +85,8 @@ AND CENTROID_VW_SF.SF_ID < 140000
     dataset_ref = client.dataset(dataset_id)
     table_ref = dataset_ref.table(table_id)
     job_config = bigquery.LoadJobConfig()
-    job_config.autodetect = True
+    table_schema = table_ref.schema
+    job_config.schema = table_schema
     job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
     job = client.load_table_from_json(
           gcp, table_ref, job_config=job_config
