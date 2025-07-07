@@ -35,17 +35,17 @@ cron:
   timezone: America/Boise
   target: default
 - description: natureCentroid60k
-  url: /natureCentroid
+  url: /natureCentroid60k
   schedule: every sunday 22:45 #short query, ok to run sequentially. 25 min run time.
   timezone: America/Boise
   target: default
 - description: natureCentroid60k_140k
-  url: /natureCentroid
+  url: /natureCentroid60k_140k
   schedule: every monday 00:30 #short query, ok to run sequentially. 30 min run time.
   timezone: America/Boise
   target: default
 - description: natureCentroid140k
-  url: /natureCentroid
+  url: /natureCentroid140k
   schedule: every monday 02:00 #short query, ok to run sequentially. 30 min run time.
   timezone: America/Boise
   target: default
