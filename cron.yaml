@@ -49,3 +49,8 @@ cron:
   schedule: every monday 02:00 #short query, ok to run sequentially. 30 min run time.
   timezone: America/Boise
   target: default
+- description: natureFieldGuide
+  url: /natureFieldGuide
+  schedule: every monday 03:00 #short query, ok to run sequentially. 10 min run time.
+  timezone: America/Boise
+  target: default
