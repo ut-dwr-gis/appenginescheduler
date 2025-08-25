@@ -14,12 +14,13 @@ import functions.natureCentroid140k as natureCentroid140k
 import functions.naturePoint as naturePoint
 import functions.naturePoly as naturePoly
 import functions.natureLine as natureLine
+import functions.natureFieldGuide as natureFieldGuide
 import os
 
 app = flask.Flask(__name__)
 @app.route('/')
 def nature():
-    return "Flask App (Pipeline) modified by Tyler Stratman 06/25/2025, originally written by william wiskes 9/29/22 published under MIT"
+    return "Flask App (Pipeline) last modified by Tyler Stratman 08/25/2025, originally written by william wiskes 9/29/22 published under MIT license"
 
 
 @app.route('/natureCentroidCitation') 
@@ -116,6 +117,14 @@ def start_natureLine():
         logging.exception(e)
         return "Error: <pre>{}</pre>".format(e), 500
 
+@app.route('/natureFieldGuide')
+def start_natureFieldGuide():
+    try:
+        nl = natureFieldGuide.run() 
+        return nl, 200
+    except Exception as e:
+        logging.exception(e)
+        return "Error: <pre>{}</pre>".format(e), 500
 
 @app.errorhandler(500) #error handling script for troubleshooting
 def server_error(e):
