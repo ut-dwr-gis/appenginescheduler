@@ -24,6 +24,13 @@ FROM FIELD_GUIDE_VW
     curs.rowfactory = lambda *args: dict(zip(columns, args))
     gcp = curs.fetchall()
 
+    for row in gcp:
+        for key, value in row.items():
+            # If a value has the '.read()' method, it's a LOB.
+            if hasattr(value, 'read'):
+                # Replace the LOB object with its text content.
+                row[key] = value.read()
+    
     PROJECT_ID = 'ut-dnr-biobase-dev'
     client = bigquery.Client(project=PROJECT_ID, location="US")
     dataset_id = 'biotics'
