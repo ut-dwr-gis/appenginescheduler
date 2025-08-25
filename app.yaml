@@ -1,4 +1,4 @@
-runtime: python312
+runtime: python310
 
 env: standard
 instance_class: B4_1G
