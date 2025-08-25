@@ -4,5 +4,6 @@ oracledb
 google-cloud-bigquery
 pandas==2.1.4
 fiona
-pygeos
+geopandas
+shapely
 db-dtypes
