@@ -31,7 +31,7 @@ FROM FIELD_GUIDE_VW
                 # Replace the LOB object with its text content.
                 row[key] = value.read()
     
-    PROJECT_ID = 'ut-dnr-biobase-dev'
+    PROJECT_ID = 'ut-gee-dwr-biot-dev'
     client = bigquery.Client(project=PROJECT_ID, location="US")
     dataset_id = 'biotics'
     table_id = 'natureFieldGuide'
