@@ -78,7 +78,7 @@ AND CENTROID_VW_SF.SF_ID < 140000
     curs.rowfactory = lambda *args: dict(zip(columns, args))
     gcp = curs.fetchall()
 
-    PROJECT_ID = 'ut-dnr-biobase-dev'
+    PROJECT_ID = 'ut-gee-dwr-biot-dev'
     client = bigquery.Client(project=PROJECT_ID, location="US")
     dataset_id = 'biotics'
     table_id = 'natureCentroid_60k_140k'
