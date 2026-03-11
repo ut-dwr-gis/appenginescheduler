@@ -29,7 +29,7 @@ FROM SOURCE_FEATURE_PRE_Line
     curs.rowfactory = lambda *args: dict(zip(columns, args))
     gcp = curs.fetchall()
 
-    PROJECT_ID = 'ut-dnr-biobase-dev'
+    PROJECT_ID = 'ut-gee-dwr-biot-dev'
     client = bigquery.Client(project=PROJECT_ID, location="US")
     # set location 
     dataset_id = 'biotics'
