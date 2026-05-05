@@ -15,18 +15,14 @@ def run():
     # conn = oracledb.connect(
     #         the actual connection is found in env.py
     # )
-    # SELECT source_feature_id,
-    #(shape).sdo_point.x as x,
-    #(shape).sdo_point.y as y,
-    #FROM SOURCE_FEATURE_PRE_PT
     curs = conn.cursor()
     sql = '''
 SELECT
     sf.source_feature_id,
-    sf.shape.sdo_point.x AS point_x,
-    sf.shape.sdo_point.y AS point_y,
-    v.x AS vertex_x,
-    v.y AS vertex_y
+    sf.shape.sdo_point.x AS old_x,
+    sf.shape.sdo_point.y AS old_y,
+    v.x AS x,
+    v.y AS y
 FROM SOURCE_FEATURE_PRE_PT sf,
 TABLE(SDO_UTIL.GETVERTICES(sf.shape)) v
 '''
