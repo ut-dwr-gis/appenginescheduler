@@ -17,10 +17,18 @@ def run():
     # )
     curs = conn.cursor()
     sql = '''
-SELECT source_feature_id,
-(shape).sdo_point.x as x,
-(shape).sdo_point.y as y 
-FROM SOURCE_FEATURE_PRE_PT
+#SELECT source_feature_id,
+#(shape).sdo_point.x as x,
+#(shape).sdo_point.y as y,
+#FROM SOURCE_FEATURE_PRE_PT
+SELECT
+    sf.SOURCE_FEATURE_ID,
+    sf.shape.sdo_point.x AS point_x,
+    sf.shape.sdo_point.y AS point_y,
+    v.x AS vertex_x,
+    v.y AS vertex_y
+FROM SOURCE_FEATURE_PRE_PT sf,
+TABLE(SDO_UTIL.GETVERTICES(sf.shape)) v;
 '''
     curs.execute(sql)
     columns = [col[0] for col in curs.description]
