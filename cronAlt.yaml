@@ -1,0 +1,56 @@
+cron:
+- description: natureCentroidCitation
+  url: /natureCentroidCitation
+  schedule: every monday 10:00 # Starts Monday. 2.75 hour run time.
+  timezone: America/Boise
+  target: default
+- description: natureCentroidCitationSF
+  url: /natureCentroidCitationSF
+  schedule: every monday 16:00 # Starts after first job finishes. 19 hour run time.
+  timezone: America/Boise
+  target: default
+- description: natureCentroidEO
+  url: /natureCentroidEO
+  schedule: every tuesday 12:00 # Starts after the 19hr run.
+  timezone: America/Boise
+  target: default
+- description: natureCentroidEOcross
+  url: /natureCentroidEOcross
+  schedule: every tuesday 12:45
+  timezone: America/Boise
+  target: default
+- description: naturePoint
+  url: /naturePoint
+  schedule: every tuesday 13:30
+  timezone: America/Boise
+  target: default
+- description: natureLine
+  url: /natureLine
+  schedule: every tuesday 14:15
+  timezone: America/Boise
+  target: default
+- description: naturePoly
+  url: /naturePoly
+  schedule: every tuesday 16:00 # Pushed slightly to maintain buffer
+  timezone: America/Boise
+  target: default
+- description: natureCentroid60k
+  url: /natureCentroid60k
+  schedule: every tuesday 16:45
+  timezone: America/Boise
+  target: default
+- description: natureCentroid60k_140k
+  url: /natureCentroid60k_140k
+  schedule: every tuesday 18:30
+  timezone: America/Boise
+  target: default
+- description: natureCentroid140k
+  url: /natureCentroid140k
+  schedule: every tuesday 20:00
+  timezone: America/Boise
+  target: default
+- description: natureFieldGuide
+  url: /natureFieldGuide
+  schedule: every tuesday 21:00
+  timezone: America/Boise
+  target: default
