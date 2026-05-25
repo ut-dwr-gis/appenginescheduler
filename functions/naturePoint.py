@@ -31,7 +31,7 @@ TABLE(SDO_UTIL.GETVERTICES(sf.shape)) v
     curs.rowfactory = lambda *args: dict(zip(columns, args))
     gcp = curs.fetchall()
 
-    PROJECT_ID = 'ut-dnr-biobase-dev'
+    PROJECT_ID = 'ut-gee-dwr-biot-dev' #See naturePoly for alternative tester code to send to multiple projects
     client = bigquery.Client(project=PROJECT_ID, location="US")
     # set location 
     dataset_id = 'biotics'
