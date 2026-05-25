@@ -27,7 +27,7 @@ FROM SOURCE_FEATURE_PRE_POLY
     curs.rowfactory = lambda *args: dict(zip(columns, args))
     gcp = curs.fetchall()
 
-    PROJECT_IDS = ['ut-dnr-biobase-dev', 'ut-gee-dwr-biot-dev']
+    PROJECT_IDS = ['ut-gee-dwr-biot-dev'] #This is coded this way so that we could send these data to multiple projects if desired #'ut-dnr-biobase-dev', 
     dataset_id = 'biotics'
     table_id = 'naturePoly'
     results = []
