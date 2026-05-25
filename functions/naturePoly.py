@@ -27,21 +27,29 @@ FROM SOURCE_FEATURE_PRE_POLY
     curs.rowfactory = lambda *args: dict(zip(columns, args))
     gcp = curs.fetchall()
 
-    PROJECT_ID = 'ut-dnr-biobase-dev'
-    client = bigquery.Client(project=PROJECT_ID, location="US")
-    # set location 
+    PROJECT_IDS = ['ut-dnr-biobase-dev', 'ut-gee-dwr-biot-dev']
     dataset_id = 'biotics'
     table_id = 'naturePoly'
-    # set config
-    dataset_ref = client.dataset(dataset_id)
-    table_ref = dataset_ref.table(table_id)
-    job_config = bigquery.LoadJobConfig()
-    job_config.autodetect = True
-    job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
-    job = client.load_table_from_json(
-          gcp, table_ref, job_config=job_config
-    ) 
-    job.result()  # Wait for the job to complete.
+    results = []
+
+    for project in PROJECT_IDS:
+        # Re-initialize client for the specific project
+        client = bigquery.Client(project=project, location="US")
+        
+        dataset_ref = client.dataset(dataset_id)
+        table_ref = dataset_ref.table(table_id)
+        
+        job_config = bigquery.LoadJobConfig()
+        job_config.autodetect = True
+        job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
+        
+        # Trigger the load
+        job = client.load_table_from_json(
+              gcp, table_ref, job_config=job_config
+        ) 
+        job.result()  # Wait for the job to complete
+        
+        results.append(f"{project} ({job.output_rows} rows)")
       
     curs.close()
     conn.close()
