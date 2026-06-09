@@ -15,6 +15,7 @@ import functions.naturePoint as naturePoint
 import functions.naturePoly as naturePoly
 import functions.natureLine as natureLine
 import functions.natureFieldGuide as natureFieldGuide
+import functions.biotics_full_backup as biotics_full_backup
 import os
 
 app = flask.Flask(__name__)
@@ -129,7 +130,7 @@ def start_natureFieldGuide():
 @app.route('/biotics_full_backup')
 def start_biotics_full_backup():
     try:
-        bu = biotics_full_backup.py.run() 
+        bu = biotics_full_backup.run() 
         return bu, 200
     except Exception as e:
         logging.exception(e)
