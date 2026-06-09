@@ -53,7 +53,7 @@ TABLES_CONFIG = {
 def run():
     curs = conn.cursor()
     project_id = 'ut-gee-dwr-biot-dev'
-    dataset_id = 'biotics'
+    dataset_id = 'bioticsBackup'
     client = bigquery.Client(project=project_id, location="US")
 
     for table_name, config in TABLES_CONFIG.items():
