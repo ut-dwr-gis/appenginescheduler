@@ -120,8 +120,17 @@ def start_natureLine():
 @app.route('/natureFieldGuide')
 def start_natureFieldGuide():
     try:
-        nl = natureFieldGuide.run() 
-        return nl, 200
+        nf = natureFieldGuide.run() 
+        return nf, 200
+    except Exception as e:
+        logging.exception(e)
+        return "Error: <pre>{}</pre>".format(e), 500
+
+@app.route('/biotics_full_backup')
+def start_biotics_full_backup():
+    try:
+        bu = biotics_full_backup.py.run() 
+        return bu, 200
     except Exception as e:
         logging.exception(e)
         return "Error: <pre>{}</pre>".format(e), 500
