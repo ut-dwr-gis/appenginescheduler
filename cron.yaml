@@ -54,3 +54,8 @@ cron:
   schedule: every monday 03:00 #short query, ok to run sequentially. 10 min run time.
   timezone: America/Boise
   target: default
+- description: biotics_full_backup
+  url: /biotics_full_backup
+  schedule: every wednesday 02:00 #short query, ok to run sequentially. 10 min run time.
+  timezone: America/Boise
+  target: default
