@@ -21,7 +21,7 @@ TABLES_CONFIG = {
         "query": "SELECT * FROM D_DATASET"
     },
     "SOURCE_FEATURE_PRE_POLY": {
-        "query": "SELECT * FROM D_DATASET"
+        "query": "SELECT * FROM SOURCE_FEATURE_PRE_POLY"
     },
     
     # -------------------------------------------------------------
