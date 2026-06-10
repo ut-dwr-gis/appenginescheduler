@@ -20,18 +20,21 @@ TABLES_CONFIG = {
     "D_DATASET": {
         "query": "SELECT * FROM D_DATASET"
     },
+    "SOURCE_FEATURE_PRE_POLY": {
+        "query": "SELECT * FROM D_DATASET"
+    },
     
     # -------------------------------------------------------------
-    # 2. AUDIT/LOG TABLE (Tests the chunked/fetchmany memory safeguard)
+    # 2. VIEWS
     # -------------------------------------------------------------
-    "CONTACT_DEL": {
-        "query": "SELECT * FROM CONTACT_DEL"
+    "BCD_EOR": {
+        "query": "SELECT * FROM BCD_EOR"
     },
     
     # -------------------------------------------------------------
     # 3. SPATIAL TABLES (Extracts centroid coordinates vs WKT Text)
     # -------------------------------------------------------------
-    "SOURCE_FEATURE_PRE_POLY": {
+    "SOURCE_FEATURE_PRE_POLY_CENT": {
         "query": """
             SELECT source_feature_id,
                    SDO_GEOM.SDO_CENTROID(shape, 0.005).sdo_point.x AS x,
