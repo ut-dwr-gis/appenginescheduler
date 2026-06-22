@@ -963,25 +963,21 @@ def run():
                 job_config.autodetect = True
                 job_config.source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
                 
-                # Setup active relaxation conditions for subsequent batch steps
-                job_config.schema_update_options = [
-                    bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION,
-                    bigquery.SchemaUpdateOption.ALLOW_FIELD_RELAXATION
-                ]
-                
+                # Operational routing by batch stage
                 if first_batch:
                     job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
+                    # DO NOT define schema_update_options here
                     first_batch = False
                 else:
                     job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
-                    # Apply schema update rules exclusively during append operations
+                    # Only apply relaxation to follow-up append chunks
                     job_config.schema_update_options = [
                         bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION,
                         bigquery.SchemaUpdateOption.ALLOW_FIELD_RELAXATION
                     ]
 
                 job = client.load_table_from_json(processed_data, table_ref, job_config=job_config)
-                job.result() # Raises exception if validation or chunk loading fails
+                job.result()
                 
             logging.info(f"Successfully migrated: {table_name}")
 
