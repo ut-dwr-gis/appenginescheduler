@@ -974,6 +974,11 @@ def run():
                     first_batch = False
                 else:
                     job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
+                    # Apply schema update rules exclusively during append operations
+                    job_config.schema_update_options = [
+                        bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION,
+                        bigquery.SchemaUpdateOption.ALLOW_FIELD_RELAXATION
+                    ]
 
                 job = client.load_table_from_json(processed_data, table_ref, job_config=job_config)
                 job.result() # Raises exception if validation or chunk loading fails
