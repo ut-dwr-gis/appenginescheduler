@@ -892,7 +892,6 @@ TABLES_CONFIG.update(INCOMPLETE_PROCESSING_TABLES)
 def sanitize_row_data(row, table_name):
     """
     Safely intercepts and normalizes type drift variations across Oracle table records.
-    Casting to standard types up front protects multi-batch JSON pipeline uploads.
     """
     sanitized = {}
     for key, value in row.items():
@@ -904,20 +903,18 @@ def sanitize_row_data(row, table_name):
         elif isinstance(value, oracledb.DbObject):
             value = str(value)
 
-        # Apply definitive type overrides based on your specific execution logs
+        # Force troublesome drifting columns to STRING right away
         if value is not None:
-            # Global standard fallback rule: If a column fluctuates across batches 
-            # into mixing letters, strings, and integers, force it to STRING.
             if key in [
                 "OLD_VALUE", "PARENT_ID", "ELEMENT_GROUP_ID", "DISPLAY_ORDER", 
                 "D_RANKING_SPATIAL_PATTERN_ID", "D_DATASET_ID", "MAPSHEET_BCD", 
                 "NAME_4", "N_RECEIVED_DATE", "PROTECTION_ORG_USEFULNESS",
-                "OBS_FEATURE_LENGTH", "ELEMENT_SEQUENCE_NUM"
+                "OBS_FEATURE_LENGTH", "ELEMENT_SEQUENCE_NUM", "ALPINE_USEFULNESS"
             ]:
                 value = str(value)
             
-            # Numeric Float Variations
-            elif key in ["MIN_PERCENT_COVER", "AVG_PERCENT_COVER_EST"]:
+            # Ensure numeric precision overrides
+            elif key in ["MIN_PERCENT_COVER", "AVG_PERCENT_COVER_EST", "MAX_PERCENT_COVER"]:
                 value = float(value)
 
         sanitized[key] = value
@@ -933,51 +930,36 @@ def run():
     for table_name, config in TABLES_CONFIG.items():
         logging.info(f"Processing table: {table_name}")
         try:
-            # Opt-in step: To overcome a corrupted, un-swappable existing schema model, 
-            # we safely drop historical broken target instances if running a TRUNCATE job.
+            # Drop the table to clear out any bad historical schemas locked inside BQ
             try:
-                client.delete_table(f"{project_id}.{dataset_id}.{table_name}")
-                logging.info(f"Dropped target destination schema tracking for {table_name} to reset type profiles cleanly.")
+                client.delete_table(f"{project_id}.{dataset_id}.{table_name}", not_found_ok=True)
+                logging.info(f"Dropped target destination schema tracking for {table_name}.")
             except Exception:
-                pass # Proceed safely if table does not exist yet
+                pass
 
             curs.execute(config["query"])
             columns = [col[0] for col in curs.description]
             curs.rowfactory = lambda *args: dict(zip(columns, args))
             
-            ROW_BATCH_SIZE = 50000
-            first_batch = True
+            # --- THE FIX: GRAB ALL DATA AT ONCE ---
+            # This completely avoids multi-batch type drift errors.
+            raw_data = curs.fetchall()
             
-            while True:
-                raw_data = curs.fetchmany(ROW_BATCH_SIZE)
-                if not raw_data and not first_batch:
-                    break
-                if not raw_data and first_batch:
-                    logging.info(f"Table {table_name} is empty. Skipping.")
-                    break
+            if not raw_data:
+                logging.info(f"Table {table_name} is empty. Skipping.")
+                continue
 
-                processed_data = [sanitize_row_data(row, table_name) for row in raw_data]
+            processed_data = [sanitize_row_data(row, table_name) for row in raw_data]
 
-                table_ref = client.dataset(dataset_id).table(table_name)
-                job_config = bigquery.LoadJobConfig()
-                job_config.autodetect = True
-                job_config.source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
-                
-                # Operational routing by batch stage
-                if first_batch:
-                    job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
-                    # DO NOT define schema_update_options here
-                    first_batch = False
-                else:
-                    job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
-                    # Only apply relaxation to follow-up append chunks
-                    job_config.schema_update_options = [
-                        bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION,
-                        bigquery.SchemaUpdateOption.ALLOW_FIELD_RELAXATION
-                    ]
+            table_ref = client.dataset(dataset_id).table(table_name)
+            job_config = bigquery.LoadJobConfig()
+            job_config.autodetect = True
+            job_config.source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
+            job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
 
-                job = client.load_table_from_json(processed_data, table_ref, job_config=job_config)
-                job.result()
+            # Single payload push
+            job = client.load_table_from_json(processed_data, table_ref, job_config=job_config)
+            job.result()
                 
             logging.info(f"Successfully migrated: {table_name}")
 
