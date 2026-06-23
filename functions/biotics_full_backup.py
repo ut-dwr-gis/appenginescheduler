@@ -791,12 +791,8 @@ logging.basicConfig(level=logging.INFO)
 # }
 
 # Group: Tables failing due to Native Datetime serialization rules (1 tables)
-DATETIME_ERROR_TABLES = {
+ERRORED_TABLES = {
     "ELEMENT_NATIONAL": {"query": "SELECT * FROM ELEMENT_NATIONAL"},
-}
-
-# Group: Tables causing operational pipeline mismatches (2 tables)
-SCHEMA_AND_TYPE_MISMATCH_TABLES = {
     "AUDIT_LOG_COLUMN": {"query": "SELECT * FROM AUDIT_LOG_COLUMN"},
     "COMM_CAG_COMPOSITION": {"query": "SELECT * FROM COMM_CAG_COMPOSITION"},
     "ELEMENT_GLOBAL": {"query": "SELECT * FROM ELEMENT_GLOBAL"},
@@ -811,10 +807,6 @@ SCHEMA_AND_TYPE_MISMATCH_TABLES = {
     "TAXON_NATIONAL": {"query": "SELECT * FROM TAXON_NATIONAL"},
     "TAXON_NATL_DIST": {"query": "SELECT * FROM TAXON_NATL_DIST"},
     "VISIT": {"query": "SELECT * FROM VISIT"},
-}
-
-# Group: Incomplete background process staging rows (7 tables)
-INCOMPLETE_PROCESSING_TABLES = {
     "D_MAPSHEET": {"query": "SELECT * FROM D_MAPSHEET"},
     "REFERENCE": {"query": "SELECT * FROM REFERENCE"},
     "SCIENTIFIC_NAME": {"query": "SELECT * FROM SCIENTIFIC_NAME"},
@@ -879,23 +871,22 @@ INCOMPLETE_PROCESSING_TABLES = {
 # MASTER CONFIGURATION COMPILER
 # =====================================================================
 TABLES_CONFIG = {}
-# TABLES_CONFIG.update(SUCCESSFUL_TABLES)
-TABLES_CONFIG.update(DATETIME_ERROR_TABLES)
-TABLES_CONFIG.update(SCHEMA_AND_TYPE_MISMATCH_TABLES)
-TABLES_CONFIG.update(INCOMPLETE_PROCESSING_TABLES)
-# TABLES_CONFIG.update(NON_EXISTENT_OR_INVALID_TABLES)
+TABLES_CONFIG.update(SUCCESSFUL_TABLES)
+TABLES_CONFIG.update(ERRORED_TABLES)
+TABLES_CONFIG.update(NON_EXISTENT_OR_INVALID_TABLES)
 
+# --- FIX 1: POINT THE OVERRIDE MAPPING SAFELY TO THE REDEFINED GROUP ---
+FETCHALL_OVERRIDE_TABLES = set(ERRORED_TABLES.keys())
 
 # =====================================================================
-# RUNNER PIPELINE LOGIC WITH INLINE SANITIZER
+# CORE PIPELINE LOGIC WITH INLINE SANITIZER
 # =====================================================================
 def sanitize_row_data(row, table_name):
     """
-    Safely intercepts and normalizes type drift variations across Oracle table records.
+    Transforms native Oracle data types safely into JSON-compliant forms.
     """
     sanitized = {}
     for key, value in row.items():
-        # Handle core native object types
         if isinstance(value, oracledb.LOB):
             value = value.read()
         elif isinstance(value, (datetime.datetime, datetime.date)):
@@ -903,8 +894,8 @@ def sanitize_row_data(row, table_name):
         elif isinstance(value, oracledb.DbObject):
             value = str(value)
 
-        # Force troublesome drifting columns to STRING right away
-        if value is not None:
+        # Apply primitive string alignment ONLY when processing the 20 single-shot overrides
+        if value is not None and table_name in FETCHALL_OVERRIDE_TABLES:
             if key in [
                 "OLD_VALUE", "PARENT_ID", "ELEMENT_GROUP_ID", "DISPLAY_ORDER", 
                 "D_RANKING_SPATIAL_PATTERN_ID", "D_DATASET_ID", "MAPSHEET_BCD", 
@@ -912,13 +903,10 @@ def sanitize_row_data(row, table_name):
                 "OBS_FEATURE_LENGTH", "ELEMENT_SEQUENCE_NUM", "ALPINE_USEFULNESS"
             ]:
                 value = str(value)
-            
-            # Ensure numeric precision overrides
             elif key in ["MIN_PERCENT_COVER", "AVG_PERCENT_COVER_EST", "MAX_PERCENT_COVER"]:
                 value = float(value)
 
         sanitized[key] = value
-        
     return sanitized
 
 def run():
@@ -930,36 +918,75 @@ def run():
     for table_name, config in TABLES_CONFIG.items():
         logging.info(f"Processing table: {table_name}")
         try:
-            # Drop the table to clear out any bad historical schemas locked inside BQ
-            try:
-                client.delete_table(f"{project_id}.{dataset_id}.{table_name}", not_found_ok=True)
-                logging.info(f"Dropped target destination schema tracking for {table_name}.")
-            except Exception:
-                pass
+            # Force clean target baseline configurations for the 20 exception variants
+            if table_name in FETCHALL_OVERRIDE_TABLES:
+                try:
+                    client.delete_table(f"{project_id}.{dataset_id}.{table_name}", not_found_ok=True)
+                    logging.info(f"Dropped target schema tracking for {table_name} to clear structural locks.")
+                except Exception:
+                    pass
 
             curs.execute(config["query"])
             columns = [col[0] for col in curs.description]
             curs.rowfactory = lambda *args: dict(zip(columns, args))
             
-            # --- THE FIX: GRAB ALL DATA AT ONCE ---
-            # This completely avoids multi-batch type drift errors.
-            raw_data = curs.fetchall()
+            # -----------------------------------------------------------------
+            # PATH 1: EXCEPTION ROUTE — ONE-SHOT FETCHALL() FOR THE 20 TABLES
+            # -----------------------------------------------------------------
+            if table_name in FETCHALL_OVERRIDE_TABLES:
+                logging.info(f"Executing One-Shot fetchall() strategy on: {table_name}")
+                raw_data = curs.fetchall()
+                
+                if not raw_data:
+                    logging.info(f"Table {table_name} is empty. Skipping.")
+                    continue
+
+                processed_data = [sanitize_row_data(row, table_name) for row in raw_data]
+
+                table_ref = client.dataset(dataset_id).table(table_name)
+                job_config = bigquery.LoadJobConfig()
+                job_config.autodetect = True
+                job_config.source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
+                job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
+
+                job = client.load_table_from_json(processed_data, table_ref, job_config=job_config)
+                job.result()
             
-            if not raw_data:
-                logging.info(f"Table {table_name} is empty. Skipping.")
-                continue
+            # -----------------------------------------------------------------
+            # PATH 2: STANDARD ROUTE — MEMORY-SAFE CHUNKED FETCHMANY() FOR 730 TABLES
+            # --- FIX 2: UNCOMMENT AND HOOK UP THE INDENTED ELSE ROUTER FLOW ---
+            # -----------------------------------------------------------------
+            else:
+                ROW_BATCH_SIZE = 50000
+                first_batch = True
+                
+                while True:
+                    raw_data = curs.fetchmany(ROW_BATCH_SIZE)
+                    if not raw_data and not first_batch:
+                        break
+                    if not raw_data and first_batch:
+                        logging.info(f"Table {table_name} is empty. Skipping.")
+                        break
 
-            processed_data = [sanitize_row_data(row, table_name) for row in raw_data]
+                    processed_data = [sanitize_row_data(row, table_name) for row in raw_data]
 
-            table_ref = client.dataset(dataset_id).table(table_name)
-            job_config = bigquery.LoadJobConfig()
-            job_config.autodetect = True
-            job_config.source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
-            job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
+                    table_ref = client.dataset(dataset_id).table(table_name)
+                    job_config = bigquery.LoadJobConfig()
+                    job_config.autodetect = True
+                    job_config.source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
+                    
+                    if first_batch:
+                        job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
+                        first_batch = False
+                    else:
+                        job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
+                        job_config.schema_update_options = [
+                            bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION,
+                            bigquery.SchemaUpdateOption.ALLOW_FIELD_RELAXATION
+                        ]
 
-            # Single payload push
-            job = client.load_table_from_json(processed_data, table_ref, job_config=job_config)
-            job.result()
+                    job = client.load_table_from_json(processed_data, table_ref, job_config=job_config)
+                    job.result()
                 
             logging.info(f"Successfully migrated: {table_name}")
 
