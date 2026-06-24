@@ -790,13 +790,13 @@ logging.basicConfig(level=logging.INFO)
     # "SOURCE_FEATURE_REP_PROJ": {"query": "SELECT * FROM SOURCE_FEATURE_REP_PROJ"},
 #Needed Full FetchAll
     # "ELEMENT_NATIONAL": {"query": "SELECT * FROM ELEMENT_NATIONAL"},
+    # "ELEMENT_GLOBAL": {"query": "SELECT * FROM ELEMENT_GLOBAL"},
 # }
 
 # Group: Tables failing due to Native Datetime serialization rules (1 tables)
 ERRORED_TABLES = {
 # Come Back To This One    "AUDIT_LOG_COLUMN": {"query": "SELECT * FROM AUDIT_LOG_COLUMN"},
     "COMM_CAG_COMPOSITION": {"query": "SELECT * FROM COMM_CAG_COMPOSITION"},
-    "ELEMENT_GLOBAL": {"query": "SELECT * FROM ELEMENT_GLOBAL"},
     "ELEMENT_GLOBAL_RANK": {"query": "SELECT * FROM ELEMENT_GLOBAL_RANK"},
     "ELEMENT_GLOBAL_REF": {"query": "SELECT * FROM ELEMENT_GLOBAL_REF"},
     "EO_RANK_SPECS": {"query": "SELECT * FROM EO_RANK_SPECS"},
