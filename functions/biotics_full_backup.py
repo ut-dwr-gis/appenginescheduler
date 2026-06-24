@@ -881,9 +881,10 @@ FETCHALL_OVERRIDE_TABLES = set(ERRORED_TABLES.keys())
 # =====================================================================
 # CORE PIPELINE LOGIC WITH INLINE SANITIZER
 # =====================================================================
-def sanitize_row_data(row, table_name):
+def sanitize_row_data(row):
     """
-    Transforms native Oracle data types safely into JSON-compliant forms.
+    Normalizes specific type mutations inline to provide consistent 
+    data type delivery across sequential 500k row batch operations.
     """
     sanitized = {}
     for key, value in row.items():
@@ -894,21 +895,27 @@ def sanitize_row_data(row, table_name):
         elif isinstance(value, oracledb.DbObject):
             value = str(value)
 
-        # Apply primitive string alignment ONLY when processing the 20 single-shot overrides
-        if value is not None and table_name in FETCHALL_OVERRIDE_TABLES:
-            if key in [
+        if value is not None:
+            key_upper = key.upper()
+            # Force known problem fields to STRING to ensure multi-batch compatibility
+            if key_upper in [
                 "OLD_VALUE", "PARENT_ID", "ELEMENT_GROUP_ID", "DISPLAY_ORDER", 
                 "D_RANKING_SPATIAL_PATTERN_ID", "D_DATASET_ID", "MAPSHEET_BCD", 
                 "NAME_4", "N_RECEIVED_DATE", "PROTECTION_ORG_USEFULNESS",
-                "OBS_FEATURE_LENGTH", "ELEMENT_SEQUENCE_NUM", "ALPINE_USEFULNESS"
+                "OBS_FEATURE_LENGTH", "ELEMENT_SEQUENCE_NUM", "ALPINE_USEFULNESS",
+                "CONSTANCY", "G_AOO_PERCENT_GOOD_EST"
             ]:
                 value = str(value)
-            elif key in ["MIN_PERCENT_COVER", "AVG_PERCENT_COVER_EST", "MAX_PERCENT_COVER"]:
+            # Standardize numeric decimal variations 
+            elif key_upper in ["MIN_PERCENT_COVER", "AVG_PERCENT_COVER_EST", "MAX_PERCENT_COVER"]:
                 value = float(value)
 
         sanitized[key] = value
     return sanitized
 
+# =====================================================================
+# CORE ITERATION ENGINE (FETCHMANY WITH 500K ROW HEADROOM)
+# =====================================================================
 def run():
     curs = conn.cursor()
     project_id = 'ut-gee-dwr-biot-dev'
@@ -918,75 +925,49 @@ def run():
     for table_name, config in TABLES_CONFIG.items():
         logging.info(f"Processing table: {table_name}")
         try:
-            # Force clean target baseline configurations for the 20 exception variants
-            if table_name in FETCHALL_OVERRIDE_TABLES:
-                try:
-                    client.delete_table(f"{project_id}.{dataset_id}.{table_name}", not_found_ok=True)
-                    logging.info(f"Dropped target schema tracking for {table_name} to clear structural locks.")
-                except Exception:
-                    pass
+            # Force drop table to clear corrupt data type footprints
+            try:
+                client.delete_table(f"{project_id}.{dataset_id}.{table_name}", not_found_ok=True)
+                logging.info(f"Dropped schema baseline for {table_name} to clear historical locks.")
+            except Exception:
+                pass
 
             curs.execute(config["query"])
             columns = [col[0] for col in curs.description]
             curs.rowfactory = lambda *args: dict(zip(columns, args))
             
-            # -----------------------------------------------------------------
-            # PATH 1: EXCEPTION ROUTE — ONE-SHOT FETCHALL() FOR THE 20 TABLES
-            # -----------------------------------------------------------------
-            if table_name in FETCHALL_OVERRIDE_TABLES:
-                logging.info(f"Executing One-Shot fetchall() strategy on: {table_name}")
-                raw_data = curs.fetchall()
-                
-                if not raw_data:
+            # --- THE 500,000 HEADROOM CAP ---
+            ROW_BATCH_SIZE = 500000
+            first_batch = True
+            
+            while True:
+                raw_data = curs.fetchmany(ROW_BATCH_SIZE)
+                if not raw_data and not first_batch:
+                    break
+                if not raw_data and first_batch:
                     logging.info(f"Table {table_name} is empty. Skipping.")
-                    continue
+                    break
 
-                processed_data = [sanitize_row_data(row, table_name) for row in raw_data]
+                processed_data = [sanitize_row_data(row) for row in raw_data]
 
                 table_ref = client.dataset(dataset_id).table(table_name)
                 job_config = bigquery.LoadJobConfig()
                 job_config.autodetect = True
                 job_config.source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
-                job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
+                
+                if first_batch:
+                    job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
+                    first_batch = False
+                else:
+                    job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
+                    # Safely absorb any unexpected structural variances beyond row 500,000
+                    job_config.schema_update_options = [
+                        bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION,
+                        bigquery.SchemaUpdateOption.ALLOW_FIELD_RELAXATION
+                    ]
 
                 job = client.load_table_from_json(processed_data, table_ref, job_config=job_config)
                 job.result()
-            
-            # -----------------------------------------------------------------
-            # PATH 2: STANDARD ROUTE — MEMORY-SAFE CHUNKED FETCHMANY() FOR 730 TABLES
-            # --- FIX 2: UNCOMMENT AND HOOK UP THE INDENTED ELSE ROUTER FLOW ---
-            # -----------------------------------------------------------------
-            else:
-                ROW_BATCH_SIZE = 50000
-                first_batch = True
-                
-                while True:
-                    raw_data = curs.fetchmany(ROW_BATCH_SIZE)
-                    if not raw_data and not first_batch:
-                        break
-                    if not raw_data and first_batch:
-                        logging.info(f"Table {table_name} is empty. Skipping.")
-                        break
-
-                    processed_data = [sanitize_row_data(row, table_name) for row in raw_data]
-
-                    table_ref = client.dataset(dataset_id).table(table_name)
-                    job_config = bigquery.LoadJobConfig()
-                    job_config.autodetect = True
-                    job_config.source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
-                    
-                    if first_batch:
-                        job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
-                        first_batch = False
-                    else:
-                        job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
-                        job_config.schema_update_options = [
-                            bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION,
-                            bigquery.SchemaUpdateOption.ALLOW_FIELD_RELAXATION
-                        ]
-
-                    job = client.load_table_from_json(processed_data, table_ref, job_config=job_config)
-                    job.result()
                 
             logging.info(f"Successfully migrated: {table_name}")
 
