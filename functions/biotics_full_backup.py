@@ -878,54 +878,20 @@ TABLES_CONFIG.update(ERRORED_TABLES)
 FETCHALL_OVERRIDE_TABLES = set(ERRORED_TABLES.keys())
 
 # =====================================================================
-# DYNAMIC SCHEMA BUILDER ENGINE
+# STUBBORN COLUMN EXPLICIT SCHEMA OVERRIDES
 # =====================================================================
-def get_explicit_bigquery_schema(curs, table_name):
-    """
-    Queries Oracle's system catalog to fetch structural metadata.
-    Maps everything explicitly to override BigQuery auto-detect failures.
-    """
-    # Replace 'YOUR_ORACLE_SCHEMA' with your uppercase production database username
-    oracle_schema = 'YOUR_ORACLE_SCHEMA'
-    
-    curs.execute("""
-        SELECT column_name, data_type 
-        FROM all_tab_columns 
-        WHERE table_name = :t_name AND owner = :owner
-        ORDER BY column_id
-    """, t_name=table_name.upper(), owner=oracle_schema.upper())
-    
-    oracle_columns = curs.fetchall()
-    bq_schema = []
-    
-    for col_name, data_type in oracle_columns:
-        c_upper = col_name.upper().strip()
-        dt_upper = data_type.upper().strip()
-        
-        # Intercept and force drift-heavy fields directly to uniform STRINGS
-        if c_upper in [
-            "OLD_VALUE", "PARENT_ID", "ELEMENT_GROUP_ID", "DISPLAY_ORDER", 
-            "D_RANKING_SPATIAL_PATTERN_ID", "D_DATASET_ID", "MAPSHEET_BCD", 
-            "NAME_4", "N_RECEIVED_DATE", "PROTECTION_ORG_USEFULNESS",
-            "OBS_FEATURE_LENGTH", "ELEMENT_SEQUENCE_NUM", "CONSTANCY", 
-            "G_AOO_PERCENT_GOOD_EST"
-        ]:
-            bq_schema.append(bigquery.SchemaField(c_upper, "STRING", mode="NULLABLE"))
-            
-        elif c_upper == "ALPINE_USEFULNESS":
-            bq_schema.append(bigquery.SchemaField(c_upper, "BOOLEAN", mode="NULLABLE"))
-            
-        # Standard structural fallback mappings
-        elif "NUMBER" in dt_upper:
-            bq_schema.append(bigquery.SchemaField(c_upper, "FLOAT", mode="NULLABLE"))
-        elif "DATE" in dt_upper or "TIME" in dt_upper:
-            bq_schema.append(bigquery.SchemaField(c_upper, "TIMESTAMP", mode="NULLABLE"))
-        elif "CLOB" in dt_upper or "BLOB" in dt_upper:
-            bq_schema.append(bigquery.SchemaField(c_upper, "STRING", mode="NULLABLE"))
-        else:
-            bq_schema.append(bigquery.SchemaField(c_upper, "STRING", mode="NULLABLE"))
-            
-    return bq_schema
+# This forces BigQuery to skip type-guessing for just these specific fields.
+# Autodetect will still handle every other column in the table automatically.
+STUBBORN_SCHEMAS = {
+    "COMM_CAG_COMPOSITION": [bigquery.SchemaField("CONSTANCY", "STRING", mode="NULLABLE")],
+    "ELEMENT_GLOBAL_RANK": [bigquery.SchemaField("G_AOO_PERCENT_GOOD_EST", "STRING", mode="NULLABLE")],
+    "ELEMENT_GLOBAL_REF": [bigquery.SchemaField("DISPLAY_ORDER", "STRING", mode="NULLABLE")],
+    "D_MAPSHEET": [bigquery.SchemaField("MAPSHEET_BCD", "STRING", mode="NULLABLE")],
+    "REFERENCE": [bigquery.SchemaField("ALPINE_USEFULNESS", "STRING", mode="NULLABLE")],
+    "SCIENTIFIC_NAME": [bigquery.SchemaField("NAME_4", "STRING", mode="NULLABLE")],
+    "SOURCE_FEATURE": [bigquery.SchemaField("OBS_FEATURE_LENGTH", "STRING", mode="NULLABLE")],
+    "TAXON_GLOBAL": [bigquery.SchemaField("ELEMENT_SEQUENCE_NUM", "STRING", mode="NULLABLE")]
+}
 
 # =====================================================================
 # DATA ROW CLEANING FILTER
@@ -951,15 +917,14 @@ def sanitize_row_data(row, table_name):
                 "D_RANKING_SPATIAL_PATTERN_ID", "D_DATASET_ID", "MAPSHEET_BCD", 
                 "NAME_4", "N_RECEIVED_DATE", "PROTECTION_ORG_USEFULNESS",
                 "OBS_FEATURE_LENGTH", "ELEMENT_SEQUENCE_NUM", "CONSTANCY", 
-                "G_AOO_PERCENT_GOOD_EST"
+                "G_AOO_PERCENT_GOOD_EST", "ALPINE_USEFULNESS"
             ]:
                 value = str(value).strip()
             elif key_upper in ["MIN_PERCENT_COVER", "AVG_PERCENT_COVER_EST", "MAX_PERCENT_COVER"]:
-                try: value = float(value)
-                except ValueError: value = str(value)
-            elif key_upper == "ALPINE_USEFULNESS":
-                normalized_val = str(value).strip().lower()
-                value = normalized_val in ['1', 'true', 't', 'y', 'yes']
+                try:
+                    value = float(value)
+                except ValueError:
+                    value = str(value)
 
         sanitized[key] = value
     return sanitized
@@ -976,124 +941,7 @@ def run():
     for table_name, config in TABLES_CONFIG.items():
         logging.info(f"Processing table: {table_name}")
         try:
-            # Drop the table to clear out the incorrect schemas cached in BigQuery
-            client.delete_table(f"{project_id}.{dataset_id}.{table_name}", not_found_ok=True)
-            logging.info(f"Dropped schema baseline for {table_name} to clear historical locks.")
-
-            # Dynamically fetch the correct schema directly from Oracle's data dictionary
-            explicit_schema = get_explicit_bigquery_schema(curs, table_name)
-            logging.info(f"Compiled explicit schema map for {table_name} containing {len(explicit_schema)} fields.")
-
-            curs.execute(config["query"])
-            columns = [col[0] for col in curs.description]
-            curs.rowfactory = lambda *args: dict(zip(columns, args))
-            
-            ROW_BATCH_SIZE = 500000
-            first_batch = True
-            
-            while True:
-                raw_data = curs.fetchmany(ROW_BATCH_SIZE)
-                if not raw_data and not first_batch:
-                    break
-                if not raw_data and first_batch:
-                    logging.info(f"Table {table_name} is empty. Skipping.")
-                    break
-
-                processed_data = [sanitize_row_data(row, table_name) for row in raw_data]
-
-                table_ref = client.dataset(dataset_id).table(table_name)
-                job_config = bigquery.LoadJobConfig()
-                job_config.source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
-                
-                # Assign the explicit schema map to prevent auto-detection errors
-                job_config.schema = explicit_schema
-                job_config.autodetect = False # Disable auto-detect completely
-
-                if first_batch:
-                    job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
-                    first_batch = False
-                else:
-                    job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
-                    job_config.schema_update_options = [
-                        bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION,
-                        bigquery.SchemaUpdateOption.ALLOW_FIELD_RELAXATION
-                    ]
-
-                job = client.load_table_from_json(processed_data, table_ref, job_config=job_config)
-                job.result()
-                
-            logging.info(f"Successfully migrated: {table_name}")
-
-        except oracledb.DatabaseError as db_err:
-            error_obj, = db_err.args
-            if error_obj.code == 942:
-                logging.error(f"Skipping table {table_name}. Source table or view does not exist (ORA-00942).")
-            else:
-                logging.error(f"Database error on table {table_name}: {str(db_err)}")
-                
-        except Exception as e:
-            logging.error(f"Failed to copy {table_name}. Error: {str(e)}")
-            continue
-
-    curs.close()
-    conn.close()ive Oracle data types safely into JSON-compliant forms.
-    Guarantees type-locking down to the column string level to prevent multi-batch rejections.
-    """
-    sanitized = {}
-    for key, value in row.items():
-        if isinstance(value, oracledb.LOB):
-            value = value.read()
-        elif isinstance(value, (datetime.datetime, datetime.date)):
-            value = value.isoformat()
-        elif isinstance(value, oracledb.DbObject):
-            value = str(value)
-
-        # FIXED: Look up matching key bounds cleanly inside the active set tracking
-        if value is not None and table_name in FETCHALL_OVERRIDE_TABLES:
-            key_upper = key.upper().strip()
-            
-            # 1. Force highly unstable schema-drift columns directly to uniform STRINGS
-            if key_upper in [
-                "OLD_VALUE", "PARENT_ID", "ELEMENT_GROUP_ID", "DISPLAY_ORDER", 
-                "D_RANKING_SPATIAL_PATTERN_ID", "D_DATASET_ID", "MAPSHEET_BCD", 
-                "NAME_4", "N_RECEIVED_DATE", "PROTECTION_ORG_USEFULNESS",
-                "OBS_FEATURE_LENGTH", "ELEMENT_SEQUENCE_NUM", "ALPINE_USEFULNESS",
-                "CONSTANCY", "G_AOO_PERCENT_GOOD_EST"  # <-- ADDED: Forces these into matching string schemas
-            ]:
-                value = str(value).strip()
-            
-            # 2. Hard-cast numeric floating metrics cleanly
-            elif key_upper in ["MIN_PERCENT_COVER", "AVG_PERCENT_COVER_EST", "MAX_PERCENT_COVER"]:
-                try:
-                    value = float(value)
-                except ValueError:
-                    value = str(value)
-
-            # 3. Fix standard schema boolean evaluations 
-            elif key_upper == "ALPINE_USEFULNESS":
-                normalized_val = str(value).strip().lower()
-                if normalized_val in ['1', 'true', 't', 'y', 'yes']:
-                    value = True
-                elif normalized_val in ['0', '2', 'false', 'f', 'n', 'no']:
-                    value = False
-                else:
-                    value = False
-
-        sanitized[key] = value
-    return sanitized
-# =====================================================================
-# CORE ITERATION ENGINE (FETCHMANY WITH 500K ROW HEADROOM)
-# =====================================================================
-def run():
-    curs = conn.cursor()
-    project_id = 'ut-gee-dwr-biot-dev'
-    dataset_id = 'bioticsBackup'
-    client = bigquery.Client(project=project_id, location="US")
-
-    for table_name, config in TABLES_CONFIG.items():
-        logging.info(f"Processing table: {table_name}")
-        try:
-            # Force drop table to clear corrupt data type footprints
+            # Force drop the table to clear out previous auto-detected schemas
             try:
                 client.delete_table(f"{project_id}.{dataset_id}.{table_name}", not_found_ok=True)
                 logging.info(f"Dropped schema baseline for {table_name} to clear historical locks.")
@@ -1104,7 +952,6 @@ def run():
             columns = [col[0] for col in curs.description]
             curs.rowfactory = lambda *args: dict(zip(columns, args))
             
-            # --- THE 500,000 HEADROOM CAP ---
             ROW_BATCH_SIZE = 500000
             first_batch = True
             
@@ -1116,6 +963,7 @@ def run():
                     logging.info(f"Table {table_name} is empty. Skipping.")
                     break
 
+                # FIXED: Passed table_name as the second required positional argument
                 processed_data = [sanitize_row_data(row, table_name) for row in raw_data]
 
                 table_ref = client.dataset(dataset_id).table(table_name)
@@ -1123,12 +971,15 @@ def run():
                 job_config.autodetect = True
                 job_config.source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
                 
+                # --- APPLY THE EXPLICIT COLUMN OVERRIDES ---
+                if table_name in STUBBORN_SCHEMAS:
+                    job_config.schema = STUBBORN_SCHEMAS[table_name]
+
                 if first_batch:
                     job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
                     first_batch = False
                 else:
                     job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
-                    # Safely absorb any unexpected structural variances beyond row 500,000
                     job_config.schema_update_options = [
                         bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION,
                         bigquery.SchemaUpdateOption.ALLOW_FIELD_RELAXATION
