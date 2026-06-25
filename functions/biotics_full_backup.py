@@ -877,6 +877,25 @@ TABLES_CONFIG.update(ERRORED_TABLES)
 
 FETCHALL_OVERRIDE_TABLES = set(ERRORED_TABLES.keys())
 
+# =====================================================================
+# SYSTEM DEFINITION SCHEMAS (HYBRID OVERRIDES)
+# =====================================================================
+# Specifying these columns explicitly forces BigQuery to use these types first.
+# Autodetect will still dynamically discover all other columns in the table.
+STUBBORN_SCHEMAS = {
+    "COMM_CAG_COMPOSITION": [bigquery.SchemaField("CONSTANCY", "FLOAT", mode="NULLABLE")],
+    "ELEMENT_GLOBAL_RANK": [bigquery.SchemaField("G_AOO_PERCENT_GOOD_EST", "STRING", mode="NULLABLE")],
+    "ELEMENT_GLOBAL_REF": [bigquery.SchemaField("DISPLAY_ORDER", "STRING", mode="NULLABLE")],
+    "D_MAPSHEET": [bigquery.SchemaField("MAPSHEET_BCD", "STRING", mode="NULLABLE")],
+    "REFERENCE": [
+        bigquery.SchemaField("ALPINE_USEFULNESS", "STRING", mode="NULLABLE"),
+        bigquery.SchemaField("PROTECTION_ORG_USEFULNESS", "STRING", mode="NULLABLE")
+    ],
+    "SCIENTIFIC_NAME": [bigquery.SchemaField("NAME_4", "STRING", mode="NULLABLE")],
+    "SOURCE_FEATURE": [bigquery.SchemaField("OBS_FEATURE_LENGTH", "FLOAT", mode="NULLABLE")],
+    "TAXON_GLOBAL": [bigquery.SchemaField("ELEMENT_SEQUENCE_NUM", "FLOAT", mode="NULLABLE")]
+}
+
 def sanitize_row_data(row, table_name):
     """
     Transforms native Oracle data types safely into JSON-compliant forms.
@@ -960,9 +979,16 @@ def run():
 
                 table_ref = client.dataset(dataset_id).table(table_name)
                 job_config = bigquery.LoadJobConfig()
-                job_config.autodetect = True  # Back to letting auto-detect map 100% of the columns
                 job_config.source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
                 
+                # --- THE HYBRID FIX ---
+                # 1. Lock down the stubborn type foundations explicitly
+                if table_name in STUBBORN_SCHEMAS:
+                    job_config.schema = STUBBORN_SCHEMAS[table_name]
+                
+                # 2. Tell BigQuery to autodetect all other columns around our overrides
+                job_config.autodetect = True 
+
                 if first_batch:
                     job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
                     first_batch = False
