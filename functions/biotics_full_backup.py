@@ -981,7 +981,15 @@ def run():
                     break
 
                 processed_data = [sanitize_row_data(row, table_name) for row in raw_data]
-
+                # ----------------=====================================----------------
+                # DIAGNOSTIC COLUMN PRINT: VERIFY PAYLOAD INTEGRITY BEFORE LOADING
+                # ----------------=====================================----------------
+                if first_batch and processed_data:
+                    # Extracts every single dictionary key present in the first row of your payload
+                    payload_columns = list(processed_data[0].keys())
+                    logging.info(f"--- [AUDIT] Table '{table_name}' payload contains {len(payload_columns)} total columns.")
+                    logging.info(f"--- [COLUMNS FOR '{table_name}']: {', '.join(payload_columns)}")
+                # ----------------=====================================----------------
                 table_ref = client.dataset(dataset_id).table(table_name)
                 job_config = bigquery.LoadJobConfig()
                 job_config.source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
