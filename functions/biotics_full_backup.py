@@ -994,16 +994,22 @@ def run():
                 job_config = bigquery.LoadJobConfig()
                 job_config.source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
                 
-                # --- THE HYBRID FIX ---
-                # FIXED: Applied upper case transformation to ensure configuration matching sanity
+                # --- THE HYBRID JSON FIX ---
+                # 1. Force baseline autodetection to pull all 28 fields out of the JSON string
+                job_config.autodetect = True 
+
+                # 2. Layer on your targeted type locks for just the stubborn fields
                 if t_upper in STUBBORN_SCHEMAS:
                     job_config.schema = STUBBORN_SCHEMAS[t_upper]
-                
-                job_config.autodetect = True 
 
                 if first_batch:
                     job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
                     first_batch = False
+                    # IMPORTANT: For JSON partial schemas to work on pass 1, you must pass 
+                    # relaxation options to allow the auto-detector to append the other 27 fields!
+                    job_config.schema_update_options = [
+                        bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION
+                    ]
                 else:
                     job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
                     job_config.schema_update_options = [
