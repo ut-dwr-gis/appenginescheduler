@@ -878,17 +878,14 @@ TABLES_CONFIG.update(ERRORED_TABLES)
 FETCHALL_OVERRIDE_TABLES = set(ERRORED_TABLES.keys())
 
 # =====================================================================
-# SYSTEM DEFINITION SCHEMAS (HYBRID OVERRIDES)
+# SYSTEM DEFINITION SCHEMAS (PRE-INJECTION BLUEPRINTS)
 # =====================================================================
-# Specifying these columns explicitly forces BigQuery to use these types first.
-# Autodetect will still dynamically discover all other columns in the table.
 STUBBORN_SCHEMAS = {
     "COMM_CAG_COMPOSITION": [bigquery.SchemaField("CONSTANCY", "FLOAT", mode="NULLABLE")],
     "ELEMENT_GLOBAL_RANK": [bigquery.SchemaField("G_AOO_PERCENT_GOOD_EST", "STRING", mode="NULLABLE")],
     "ELEMENT_GLOBAL_REF": [bigquery.SchemaField("DISPLAY_ORDER", "STRING", mode="NULLABLE")],
     "D_MAPSHEET": [bigquery.SchemaField("MAPSHEET_BCD", "STRING", mode="NULLABLE")],
     "REFERENCE": [
-        # FIXED: Realigned types to register as native binary booleans
         bigquery.SchemaField("ALPINE_USEFULNESS", "BOOLEAN", mode="NULLABLE"),
         bigquery.SchemaField("PROTECTION_ORG_USEFULNESS", "BOOLEAN", mode="NULLABLE")
     ],
@@ -903,7 +900,6 @@ STUBBORN_SCHEMAS = {
 def sanitize_row_data(row, table_name):
     """
     Transforms native Oracle data types safely into JSON-compliant forms.
-    Normalizes types to match our stubborn hybrid schema definitions.
     """
     sanitized = {}
     for key, value in row.items():
@@ -917,13 +913,10 @@ def sanitize_row_data(row, table_name):
         if value is not None and table_name.upper() in FETCHALL_OVERRIDE_TABLES:
             key_upper = key.upper().strip()
             
-            # 1. Map true boolean objects instead of raw string text literal phrases
             if key_upper in ["ALPINE_USEFULNESS", "PROTECTION_ORG_USEFULNESS"]:
                 normalized_val = str(value).strip().lower()
                 value = normalized_val in ['1', 'true', 't', 'y', 'yes']
             
-            # 2. Force shifting alphanumeric or text columns directly to clear strings
-            # FIXED: Removed OBS_FEATURE_LENGTH and ELEMENT_SEQUENCE_NUM from here
             elif key_upper in [
                 "OLD_VALUE", "PARENT_ID", "ELEMENT_GROUP_ID", "DISPLAY_ORDER", 
                 "D_RANKING_SPATIAL_PATTERN_ID", "D_DATASET_ID", "MAPSHEET_BCD", 
@@ -931,8 +924,6 @@ def sanitize_row_data(row, table_name):
             ]:
                 value = str(value).strip()
                 
-            # 3. Clean and isolate precision numerical decimal conversions
-            # FIXED: Added them here so they map perfectly to BigQuery's FLOAT fields
             elif key_upper in [
                 "MIN_PERCENT_COVER", "AVG_PERCENT_COVER_EST", "MAX_PERCENT_COVER",
                 "OBS_FEATURE_LENGTH", "ELEMENT_SEQUENCE_NUM", "CONSTANCY"
@@ -958,7 +949,7 @@ def run():
         logging.info(f"Processing table: {table_name}")
         t_upper = table_name.upper()
         try:
-            # Drop the table to clear out previous auto-detected schemas
+            # Drop old cached assets cleanly
             try:
                 client.delete_table(f"{project_id}.{dataset_id}.{table_name}", not_found_ok=True)
                 logging.info(f"Dropped schema baseline for {table_name} to clear historical locks.")
@@ -981,35 +972,26 @@ def run():
                     break
 
                 processed_data = [sanitize_row_data(row, table_name) for row in raw_data]
-                # ----------------=====================================----------------
-                # DIAGNOSTIC COLUMN PRINT: VERIFY PAYLOAD INTEGRITY BEFORE LOADING
-                # ----------------=====================================----------------
+
                 if first_batch and processed_data:
-                    # Extracts every single dictionary key present in the first row of your payload
                     payload_columns = list(processed_data[0].keys())
                     logging.info(f"--- [AUDIT] Table '{table_name}' payload contains {len(payload_columns)} total columns.")
                     logging.info(f"--- [COLUMNS FOR '{table_name}']: {', '.join(payload_columns)}")
-                # ----------------=====================================----------------
+
                 table_ref = client.dataset(dataset_id).table(table_name)
                 job_config = bigquery.LoadJobConfig()
                 job_config.source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
-                
-                # --- THE HYBRID JSON FIX ---
-                # 1. Force baseline autodetection to pull all 28 fields out of the JSON string
-                job_config.autodetect = True 
-
-                # 2. Layer on your targeted type locks for just the stubborn fields
-                if t_upper in STUBBORN_SCHEMAS:
-                    job_config.schema = STUBBORN_SCHEMAS[t_upper]
+                job_config.autodetect = True  # Autodetect handles everything normally
 
                 if first_batch:
-                    job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
+                    # Pre-inject our specific type locks directly onto a clean Table object schema layer
+                    if t_upper in STUBBORN_SCHEMAS:
+                        stubborn_table = bigquery.Table(table_ref, schema=STUBBORN_SCHEMAS[t_upper])
+                        client.create_table(stubborn_table, exist_ok=True)
+                        logging.info(f"Pre-initialized table structure with foundational rules for fields: {[f.name for f in STUBBORN_SCHEMAS[t_upper]]}")
+                    
+                    job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
                     first_batch = False
-                    # IMPORTANT: For JSON partial schemas to work on pass 1, you must pass 
-                    # relaxation options to allow the auto-detector to append the other 27 fields!
-                    job_config.schema_update_options = [
-                        bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION
-                    ]
                 else:
                     job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
                     job_config.schema_update_options = [
