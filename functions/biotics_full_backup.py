@@ -987,7 +987,7 @@ def run():
                     # Pre-inject our specific type locks directly onto a clean Table object schema layer
                     if t_upper in STUBBORN_SCHEMAS:
                         stubborn_table = bigquery.Table(table_ref, schema=STUBBORN_SCHEMAS[t_upper])
-                        client.create_table(stubborn_table, exist_ok=True)
+                        client.create_table(stubborn_table)
                         logging.info(f"Pre-initialized table structure with foundational rules for fields: {[f.name for f in STUBBORN_SCHEMAS[t_upper]]}")
                     
                     job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
