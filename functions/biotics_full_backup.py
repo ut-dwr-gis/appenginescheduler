@@ -791,23 +791,22 @@ logging.basicConfig(level=logging.INFO)
 #Needed Full FetchAll
     # "ELEMENT_NATIONAL": {"query": "SELECT * FROM ELEMENT_NATIONAL"},
     # "ELEMENT_GLOBAL": {"query": "SELECT * FROM ELEMENT_GLOBAL"},
+    # "EO_RANK_SPECS": {"query": "SELECT * FROM EO_RANK_SPECS"},
+    # "EO_RANK_SPECS_DETAIL": {"query": "SELECT * FROM EO_RANK_SPECS_DETAIL"},
+    # "OTHER_GLOBAL_COMMON_NAME": {"query": "SELECT * FROM OTHER_GLOBAL_COMMON_NAME"},
+    # "SCIENTIFIC_NAME_REF": {"query": "SELECT * FROM SCIENTIFIC_NAME_REF"},
+    # "SYNONYM_GLOBAL": {"query": "SELECT * FROM SYNONYM_GLOBAL"},
+    # "TAX_ELEMENT_STAKEHOLDER": {"query": "SELECT * FROM TAX_ELEMENT_STAKEHOLDER"},
+    # "TAXON_NATIONAL": {"query": "SELECT * FROM TAXON_NATIONAL"},
+    # "TAXON_NATL_DIST": {"query": "SELECT * FROM TAXON_NATL_DIST"},
+    # "VISIT": {"query": "SELECT * FROM VISIT"},
 # }
 
-# Group: Tables failing due to Native Datetime serialization rules (1 tables)
 ERRORED_TABLES = {
 # Come Back To This One    "AUDIT_LOG_COLUMN": {"query": "SELECT * FROM AUDIT_LOG_COLUMN"},
     "COMM_CAG_COMPOSITION": {"query": "SELECT * FROM COMM_CAG_COMPOSITION"},
     "ELEMENT_GLOBAL_RANK": {"query": "SELECT * FROM ELEMENT_GLOBAL_RANK"},
     "ELEMENT_GLOBAL_REF": {"query": "SELECT * FROM ELEMENT_GLOBAL_REF"},
-    "EO_RANK_SPECS": {"query": "SELECT * FROM EO_RANK_SPECS"},
-    "EO_RANK_SPECS_DETAIL": {"query": "SELECT * FROM EO_RANK_SPECS_DETAIL"},
-    "OTHER_GLOBAL_COMMON_NAME": {"query": "SELECT * FROM OTHER_GLOBAL_COMMON_NAME"},
-    "SCIENTIFIC_NAME_REF": {"query": "SELECT * FROM SCIENTIFIC_NAME_REF"},
-    "SYNONYM_GLOBAL": {"query": "SELECT * FROM SYNONYM_GLOBAL"},
-    "TAX_ELEMENT_STAKEHOLDER": {"query": "SELECT * FROM TAX_ELEMENT_STAKEHOLDER"},
-    "TAXON_NATIONAL": {"query": "SELECT * FROM TAXON_NATIONAL"},
-    "TAXON_NATL_DIST": {"query": "SELECT * FROM TAXON_NATL_DIST"},
-    "VISIT": {"query": "SELECT * FROM VISIT"},
     "D_MAPSHEET": {"query": "SELECT * FROM D_MAPSHEET"},
     "REFERENCE": {"query": "SELECT * FROM REFERENCE"},
     "SCIENTIFIC_NAME": {"query": "SELECT * FROM SCIENTIFIC_NAME"},
@@ -881,10 +880,10 @@ FETCHALL_OVERRIDE_TABLES = set(ERRORED_TABLES.keys())
 # =====================================================================
 # CORE PIPELINE LOGIC WITH INLINE SANITIZER
 # =====================================================================
-def sanitize_row_data(row):
+def sanitize_row_data(row, table_name):
     """
-    Normalizes specific type mutations inline to provide consistent 
-    data type delivery across sequential 500k row batch operations.
+    Transforms native Oracle data types safely into JSON-compliant forms.
+    Guarantees type-locking down to the column string level to prevent multi-batch rejections.
     """
     sanitized = {}
     for key, value in row.items():
@@ -895,24 +894,39 @@ def sanitize_row_data(row):
         elif isinstance(value, oracledb.DbObject):
             value = str(value)
 
-        if value is not None:
-            key_upper = key.upper()
-            # Force known problem fields to STRING to ensure multi-batch compatibility
+        # FIXED: Look up matching key bounds cleanly inside the active set tracking
+        if value is not None and table_name in FETCHALL_OVERRIDE_TABLES:
+            key_upper = key.upper().strip()
+            
+            # 1. Force highly unstable schema-drift columns directly to uniform STRINGS
             if key_upper in [
                 "OLD_VALUE", "PARENT_ID", "ELEMENT_GROUP_ID", "DISPLAY_ORDER", 
                 "D_RANKING_SPATIAL_PATTERN_ID", "D_DATASET_ID", "MAPSHEET_BCD", 
                 "NAME_4", "N_RECEIVED_DATE", "PROTECTION_ORG_USEFULNESS",
                 "OBS_FEATURE_LENGTH", "ELEMENT_SEQUENCE_NUM", "ALPINE_USEFULNESS",
-                "CONSTANCY", "G_AOO_PERCENT_GOOD_EST"
+                "CONSTANCY", "G_AOO_PERCENT_GOOD_EST"  # <-- ADDED: Forces these into matching string schemas
             ]:
-                value = str(value)
-            # Standardize numeric decimal variations 
+                value = str(value).strip()
+            
+            # 2. Hard-cast numeric floating metrics cleanly
             elif key_upper in ["MIN_PERCENT_COVER", "AVG_PERCENT_COVER_EST", "MAX_PERCENT_COVER"]:
-                value = float(value)
+                try:
+                    value = float(value)
+                except ValueError:
+                    value = str(value)
+
+            # 3. Fix standard schema boolean evaluations 
+            elif key_upper == "ALPINE_USEFULNESS":
+                normalized_val = str(value).strip().lower()
+                if normalized_val in ['1', 'true', 't', 'y', 'yes']:
+                    value = True
+                elif normalized_val in ['0', '2', 'false', 'f', 'n', 'no']:
+                    value = False
+                else:
+                    value = False
 
         sanitized[key] = value
     return sanitized
-
 # =====================================================================
 # CORE ITERATION ENGINE (FETCHMANY WITH 500K ROW HEADROOM)
 # =====================================================================
