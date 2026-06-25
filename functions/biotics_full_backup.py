@@ -976,21 +976,48 @@ def run():
                 if first_batch and processed_data:
                     payload_columns = list(processed_data[0].keys())
                     logging.info(f"--- [AUDIT] Table '{table_name}' payload contains {len(payload_columns)} total columns.")
-                    logging.info(f"--- [COLUMNS FOR '{table_name}']: {', '.join(payload_columns)}")
+
+                    # =====================================================================
+                    # YOUR RE-ENGINEERED PROGRAMMATIC SCHEMA BUILDER
+                    # =====================================================================
+                    dynamic_schema = []
+                    first_row = processed_data[0]
+                    
+                    for col, value in first_row.items():
+                        col_upper = col.upper().strip()
+                        
+                        # Hardcode your stubborn columns strictly to STRING right here
+                        if col_upper in [
+                            "OLD_VALUE", "PARENT_ID", "ELEMENT_GROUP_ID", "DISPLAY_ORDER", 
+                            "D_RANKING_SPATIAL_PATTERN_ID", "D_DATASET_ID", "MAPSHEET_BCD", 
+                            "NAME_4", "N_RECEIVED_DATE", "G_AOO_PERCENT_GOOD_EST",
+                            "CONSTANCY", "OBS_FEATURE_LENGTH", "ELEMENT_SEQUENCE_NUM"
+                        ]:
+                            dynamic_schema.append(bigquery.SchemaField(col, bigquery.SqlTypeNames.STRING))
+                        
+                        # Dynamically inherit standard Python primitives for all other columns
+                        elif isinstance(value, bool):
+                            dynamic_schema.append(bigquery.SchemaField(col, bigquery.SqlTypeNames.BOOLEAN))
+                        elif isinstance(value, int):
+                            dynamic_schema.append(bigquery.SchemaField(col, bigquery.SqlTypeNames.INTEGER))
+                        elif isinstance(value, float):
+                            dynamic_schema.append(bigquery.SchemaField(col, bigquery.SqlTypeNames.FLOAT))
+                        else:
+                            # Catch dates, timestamps, or raw text fallbacks safely as string layout
+                            dynamic_schema.append(bigquery.SchemaField(col, bigquery.SqlTypeNames.STRING))
+                    
+                    logging.info(f"Successfully generated a complete {len(dynamic_schema)} column schema via Python inspection.")
 
                 table_ref = client.dataset(dataset_id).table(table_name)
                 job_config = bigquery.LoadJobConfig()
                 job_config.source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
-                job_config.autodetect = True  # Autodetect handles everything normally
+                
+                # Assign the fully fleshed out schema array to your job
+                job_config.schema = dynamic_schema
+                job_config.autodetect = False # We can turn this off safely now!
 
                 if first_batch:
-                    # Pre-inject our specific type locks directly onto a clean Table object schema layer
-                    if t_upper in STUBBORN_SCHEMAS:
-                        stubborn_table = bigquery.Table(table_ref, schema=STUBBORN_SCHEMAS[t_upper])
-                        client.create_table(stubborn_table)
-                        logging.info(f"Pre-initialized table structure with foundational rules for fields: {[f.name for f in STUBBORN_SCHEMAS[t_upper]]}")
-                    
-                    job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
+                    job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
                     first_batch = False
                 else:
                     job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
