@@ -800,18 +800,19 @@ logging.basicConfig(level=logging.INFO)
     # "TAXON_NATIONAL": {"query": "SELECT * FROM TAXON_NATIONAL"},
     # "TAXON_NATL_DIST": {"query": "SELECT * FROM TAXON_NATL_DIST"},
     # "VISIT": {"query": "SELECT * FROM VISIT"},
+# Explicit Schema Definition
+    # "TAXON_GLOBAL": {"query": "SELECT * FROM TAXON_GLOBAL"},
+    # "COMM_CAG_COMPOSITION": {"query": "SELECT * FROM COMM_CAG_COMPOSITION"},
+    # "ELEMENT_GLOBAL_RANK": {"query": "SELECT * FROM ELEMENT_GLOBAL_RANK"},
+    # "ELEMENT_GLOBAL_REF": {"query": "SELECT * FROM ELEMENT_GLOBAL_REF"},
+    # "D_MAPSHEET": {"query": "SELECT * FROM D_MAPSHEET"},
+    # "REFERENCE": {"query": "SELECT * FROM REFERENCE"},
+    # "SCIENTIFIC_NAME": {"query": "SELECT * FROM SCIENTIFIC_NAME"},
 # }
 
 ERRORED_TABLES = {
-# Come Back To This One    "AUDIT_LOG_COLUMN": {"query": "SELECT * FROM AUDIT_LOG_COLUMN"},
-    "COMM_CAG_COMPOSITION": {"query": "SELECT * FROM COMM_CAG_COMPOSITION"},
-    "ELEMENT_GLOBAL_RANK": {"query": "SELECT * FROM ELEMENT_GLOBAL_RANK"},
-    "ELEMENT_GLOBAL_REF": {"query": "SELECT * FROM ELEMENT_GLOBAL_REF"},
-    "D_MAPSHEET": {"query": "SELECT * FROM D_MAPSHEET"},
-    "REFERENCE": {"query": "SELECT * FROM REFERENCE"},
-    "SCIENTIFIC_NAME": {"query": "SELECT * FROM SCIENTIFIC_NAME"},
+    "AUDIT_LOG_COLUMN": {"query": "SELECT * FROM AUDIT_LOG_COLUMN"},
     "SOURCE_FEATURE": {"query": "SELECT * FROM SOURCE_FEATURE"},
-    "TAXON_GLOBAL": {"query": "SELECT * FROM TAXON_GLOBAL"},
 }
 
 # # Group 7: Missing / Deprecated Tables or Views yielding ORA-00942 (42 tables)
