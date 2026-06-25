@@ -888,19 +888,22 @@ STUBBORN_SCHEMAS = {
     "ELEMENT_GLOBAL_REF": [bigquery.SchemaField("DISPLAY_ORDER", "STRING", mode="NULLABLE")],
     "D_MAPSHEET": [bigquery.SchemaField("MAPSHEET_BCD", "STRING", mode="NULLABLE")],
     "REFERENCE": [
-        bigquery.SchemaField("ALPINE_USEFULNESS", "STRING", mode="NULLABLE"),
-        bigquery.SchemaField("PROTECTION_ORG_USEFULNESS", "STRING", mode="NULLABLE")
+        # FIXED: Realigned types to register as native binary booleans
+        bigquery.SchemaField("ALPINE_USEFULNESS", "BOOLEAN", mode="NULLABLE"),
+        bigquery.SchemaField("PROTECTION_ORG_USEFULNESS", "BOOLEAN", mode="NULLABLE")
     ],
     "SCIENTIFIC_NAME": [bigquery.SchemaField("NAME_4", "STRING", mode="NULLABLE")],
     "SOURCE_FEATURE": [bigquery.SchemaField("OBS_FEATURE_LENGTH", "FLOAT", mode="NULLABLE")],
     "TAXON_GLOBAL": [bigquery.SchemaField("ELEMENT_SEQUENCE_NUM", "FLOAT", mode="NULLABLE")]
 }
 
+# =====================================================================
+# DATA ROW CLEANING FILTER
+# =====================================================================
 def sanitize_row_data(row, table_name):
     """
     Transforms native Oracle data types safely into JSON-compliant forms.
-    Normalizes boolean-drift numbers directly to string representations
-    so BigQuery's auto-detect evaluates the entire layout cleanly.
+    Normalizes types to match our stubborn hybrid schema definitions.
     """
     sanitized = {}
     for key, value in row.items():
@@ -911,28 +914,29 @@ def sanitize_row_data(row, table_name):
         elif isinstance(value, oracledb.DbObject):
             value = str(value)
 
-        if value is not None and table_name in FETCHALL_OVERRIDE_TABLES:
+        if value is not None and table_name.upper() in FETCHALL_OVERRIDE_TABLES:
             key_upper = key.upper().strip()
             
-            # Translate boolean-drift numbers ('1', '2', etc.) to literal true/false strings.
-            # This locks BigQuery's auto-detector into a safe, full STRING schema.
+            # 1. Map true boolean objects instead of raw string text literal phrases
             if key_upper in ["ALPINE_USEFULNESS", "PROTECTION_ORG_USEFULNESS"]:
                 normalized_val = str(value).strip().lower()
-                if normalized_val in ['1', 'true', 't', 'y', 'yes']:
-                    value = "true"
-                else:
-                    value = "false"
+                value = normalized_val in ['1', 'true', 't', 'y', 'yes']
             
-            # Force other shifting columns directly to clear strings
+            # 2. Force shifting alphanumeric or text columns directly to clear strings
+            # FIXED: Removed OBS_FEATURE_LENGTH and ELEMENT_SEQUENCE_NUM from here
             elif key_upper in [
                 "OLD_VALUE", "PARENT_ID", "ELEMENT_GROUP_ID", "DISPLAY_ORDER", 
                 "D_RANKING_SPATIAL_PATTERN_ID", "D_DATASET_ID", "MAPSHEET_BCD", 
-                "NAME_4", "N_RECEIVED_DATE", "OBS_FEATURE_LENGTH", 
-                "ELEMENT_SEQUENCE_NUM", "CONSTANCY", "G_AOO_PERCENT_GOOD_EST"
+                "NAME_4", "N_RECEIVED_DATE", "G_AOO_PERCENT_GOOD_EST"
             ]:
                 value = str(value).strip()
                 
-            elif key_upper in ["MIN_PERCENT_COVER", "AVG_PERCENT_COVER_EST", "MAX_PERCENT_COVER"]:
+            # 3. Clean and isolate precision numerical decimal conversions
+            # FIXED: Added them here so they map perfectly to BigQuery's FLOAT fields
+            elif key_upper in [
+                "MIN_PERCENT_COVER", "AVG_PERCENT_COVER_EST", "MAX_PERCENT_COVER",
+                "OBS_FEATURE_LENGTH", "ELEMENT_SEQUENCE_NUM", "CONSTANCY"
+            ]:
                 try:
                     value = float(value)
                 except ValueError:
@@ -952,8 +956,9 @@ def run():
 
     for table_name, config in TABLES_CONFIG.items():
         logging.info(f"Processing table: {table_name}")
+        t_upper = table_name.upper()
         try:
-            # Drop the table to clear out the partial single-column schemas
+            # Drop the table to clear out previous auto-detected schemas
             try:
                 client.delete_table(f"{project_id}.{dataset_id}.{table_name}", not_found_ok=True)
                 logging.info(f"Dropped schema baseline for {table_name} to clear historical locks.")
@@ -982,11 +987,10 @@ def run():
                 job_config.source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
                 
                 # --- THE HYBRID FIX ---
-                # 1. Lock down the stubborn type foundations explicitly
-                if table_name in STUBBORN_SCHEMAS:
-                    job_config.schema = STUBBORN_SCHEMAS[table_name]
+                # FIXED: Applied upper case transformation to ensure configuration matching sanity
+                if t_upper in STUBBORN_SCHEMAS:
+                    job_config.schema = STUBBORN_SCHEMAS[t_upper]
                 
-                # 2. Tell BigQuery to autodetect all other columns around our overrides
                 job_config.autodetect = True 
 
                 if first_batch:
