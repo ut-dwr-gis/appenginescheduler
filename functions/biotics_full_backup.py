@@ -877,28 +877,11 @@ TABLES_CONFIG.update(ERRORED_TABLES)
 
 FETCHALL_OVERRIDE_TABLES = set(ERRORED_TABLES.keys())
 
-# =====================================================================
-# STUBBORN COLUMN EXPLICIT SCHEMA OVERRIDES
-# =====================================================================
-# This forces BigQuery to skip type-guessing for just these specific fields.
-# Autodetect will still handle every other column in the table automatically.
-STUBBORN_SCHEMAS = {
-    "COMM_CAG_COMPOSITION": [bigquery.SchemaField("CONSTANCY", "STRING", mode="NULLABLE")],
-    "ELEMENT_GLOBAL_RANK": [bigquery.SchemaField("G_AOO_PERCENT_GOOD_EST", "STRING", mode="NULLABLE")],
-    "ELEMENT_GLOBAL_REF": [bigquery.SchemaField("DISPLAY_ORDER", "STRING", mode="NULLABLE")],
-    "D_MAPSHEET": [bigquery.SchemaField("MAPSHEET_BCD", "STRING", mode="NULLABLE")],
-    "REFERENCE": [bigquery.SchemaField("ALPINE_USEFULNESS", "STRING", mode="NULLABLE")],
-    "SCIENTIFIC_NAME": [bigquery.SchemaField("NAME_4", "STRING", mode="NULLABLE")],
-    "SOURCE_FEATURE": [bigquery.SchemaField("OBS_FEATURE_LENGTH", "STRING", mode="NULLABLE")],
-    "TAXON_GLOBAL": [bigquery.SchemaField("ELEMENT_SEQUENCE_NUM", "STRING", mode="NULLABLE")]
-}
-
-# =====================================================================
-# DATA ROW CLEANING FILTER
-# =====================================================================
 def sanitize_row_data(row, table_name):
     """
     Transforms native Oracle data types safely into JSON-compliant forms.
+    Normalizes boolean-drift numbers directly to string representations
+    so BigQuery's auto-detect evaluates the entire layout cleanly.
     """
     sanitized = {}
     for key, value in row.items():
@@ -912,14 +895,24 @@ def sanitize_row_data(row, table_name):
         if value is not None and table_name in FETCHALL_OVERRIDE_TABLES:
             key_upper = key.upper().strip()
             
-            if key_upper in [
+            # Translate boolean-drift numbers ('1', '2', etc.) to literal true/false strings.
+            # This locks BigQuery's auto-detector into a safe, full STRING schema.
+            if key_upper in ["ALPINE_USEFULNESS", "PROTECTION_ORG_USEFULNESS"]:
+                normalized_val = str(value).strip().lower()
+                if normalized_val in ['1', 'true', 't', 'y', 'yes']:
+                    value = "true"
+                else:
+                    value = "false"
+            
+            # Force other shifting columns directly to clear strings
+            elif key_upper in [
                 "OLD_VALUE", "PARENT_ID", "ELEMENT_GROUP_ID", "DISPLAY_ORDER", 
                 "D_RANKING_SPATIAL_PATTERN_ID", "D_DATASET_ID", "MAPSHEET_BCD", 
-                "NAME_4", "N_RECEIVED_DATE", "PROTECTION_ORG_USEFULNESS",
-                "OBS_FEATURE_LENGTH", "ELEMENT_SEQUENCE_NUM", "CONSTANCY", 
-                "G_AOO_PERCENT_GOOD_EST", "ALPINE_USEFULNESS"
+                "NAME_4", "N_RECEIVED_DATE", "OBS_FEATURE_LENGTH", 
+                "ELEMENT_SEQUENCE_NUM", "CONSTANCY", "G_AOO_PERCENT_GOOD_EST"
             ]:
                 value = str(value).strip()
+                
             elif key_upper in ["MIN_PERCENT_COVER", "AVG_PERCENT_COVER_EST", "MAX_PERCENT_COVER"]:
                 try:
                     value = float(value)
@@ -941,7 +934,7 @@ def run():
     for table_name, config in TABLES_CONFIG.items():
         logging.info(f"Processing table: {table_name}")
         try:
-            # Force drop the table to clear out previous auto-detected schemas
+            # Drop the table to clear out the partial single-column schemas
             try:
                 client.delete_table(f"{project_id}.{dataset_id}.{table_name}", not_found_ok=True)
                 logging.info(f"Dropped schema baseline for {table_name} to clear historical locks.")
@@ -963,18 +956,13 @@ def run():
                     logging.info(f"Table {table_name} is empty. Skipping.")
                     break
 
-                # FIXED: Passed table_name as the second required positional argument
                 processed_data = [sanitize_row_data(row, table_name) for row in raw_data]
 
                 table_ref = client.dataset(dataset_id).table(table_name)
                 job_config = bigquery.LoadJobConfig()
-                job_config.autodetect = True
+                job_config.autodetect = True  # Back to letting auto-detect map 100% of the columns
                 job_config.source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
                 
-                # --- APPLY THE EXPLICIT COLUMN OVERRIDES ---
-                if table_name in STUBBORN_SCHEMAS:
-                    job_config.schema = STUBBORN_SCHEMAS[table_name]
-
                 if first_batch:
                     job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
                     first_batch = False
