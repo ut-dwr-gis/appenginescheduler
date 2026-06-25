@@ -962,7 +962,7 @@ def run():
                     logging.info(f"Table {table_name} is empty. Skipping.")
                     break
 
-                processed_data = [sanitize_row_data(row) for row in raw_data]
+                processed_data = [sanitize_row_data(row, table_name) for row in raw_data]
 
                 table_ref = client.dataset(dataset_id).table(table_name)
                 job_config = bigquery.LoadJobConfig()
