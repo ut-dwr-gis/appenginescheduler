@@ -961,7 +961,11 @@ def run():
             columns = [col[0] for col in curs.description]
             curs.rowfactory = lambda *args: dict(zip(columns, args))
             
-            ROW_BATCH_SIZE = 500000
+            # --- DYNAMIC HEADROOM CHUNK CAP ---
+            if table_name.upper().strip() == "AUDIT_LOG_COLUMN":
+                ROW_BATCH_SIZE = 100000  # Smaller chunks so it writes to BigQuery frequently
+            else:
+                ROW_BATCH_SIZE = 500000 # Keep the large safety sample size for drift tables
             first_batch = True
             
             while True:
