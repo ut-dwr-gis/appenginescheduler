@@ -927,7 +927,7 @@ def sanitize_row_data(row, table_name):
                 
             elif key_upper in [
                 "MIN_PERCENT_COVER", "AVG_PERCENT_COVER_EST", "MAX_PERCENT_COVER",
-                "OBS_FEATURE_LENGTH", "ELEMENT_SEQUENCE_NUM", "CONSTANCY"
+                "OBS_FEATURE_LENGTH", "ELEMENT_SEQUENCE_NUM", "CONSTANCY", "LOC_UNCERTAINTY_DISTANCE"
             ]:
                 try:
                     value = float(value)
