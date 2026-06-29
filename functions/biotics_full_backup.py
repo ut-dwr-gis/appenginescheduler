@@ -1049,3 +1049,4 @@ def run():
 
     curs.close()
     conn.close()
+return "Biotics full backup pipeline execution completed successfully."
